@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="mapper.ApiMapper">
+    <!--CoinMarketCalApi-->
+    <select id="selectCoinMarketCalCheck" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        1 as result
+        from coin
+        where coin_name = #{name}
+        and coin_symbol = #{symbol}
+        limit 0,1
+    </select>
+    <select id="selectCoinMarketCalEventCheck" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        1 as result
+        from cion_event
+        where coin_name = #{name}
+        and coin_symbol = #{symbol}
+        and coin_event = #{coin_event}
+        limit 0,1
+    </select>
+    <update id="updateCoinMarketCalEventInfo" parameterType="java.util.HashMap">
+        update
+        coin_event
+        set is_expose = 'N'
+        where coin_name = #{name}
+        and coin_symbol = #{symbol}
+    </update>
+    <insert id="insertCoinMarketCalEventInfo" parameterType="java.util.HashMap">
+        insert into coin_event(
+        coin_name,
+        coin_symbol,
+        coin_event,
+        link,
+        event_date
+        ) values(
+        #{name},
+        #{symbol},
+        #{coin_event},
+        #{link},
+        #{event_date}
+        )
+    </insert>
+
+    <!--CoinMarketCapApiMain-->
+    <update id="updateCoinMarketCapInfo" parameterType="java.util.HashMap">
+        update
+        coin
+        set
+        state = 0,
+        site_symbol = #{site_symbol}
+        where coin_name = #{name}
+        and coin_symbol = #{symbol}
+    </update>
+    <insert id="insertCoinMarketCapInfo" parameterType="java.util.HashMap">
+        insert into coin (
+        coin_name,
+        coin_symbol,
+        coin_type,
+        site_symbol,
+        state
+        ) values(
+        #{name},
+        #{symbol},
+        #{coin_type},
+        #{site_symbol},
+        #{state}
+        )
+    </insert>
+    <insert id="insertCoinMarketCapList" parameterType="java.util.HashMap">
+        insert into coin_info(
+        coin_name,
+        coin_symbol,
+        input_date,
+        rank,
+        circulating_supply,
+        total_supply,
+        max_supply,
+        price_usd,
+		price_btc,
+		volume_24h_usd,
+		volume_24h_btc,
+		market_cap_usd,
+		percent_change_24h_usd,
+		percent_change_24h_btc,
+		percent_change_7d_usd
+        ) values(
+        #{name},
+        #{symbol},
+        #{input_date},
+        #{rank},
+        #{circulating_supply},
+        #{total_supply},
+        #{max_supply},
+        #{price_usd},
+        #{price_btc},
+        #{volume_24h_usd},
+        #{volume_24h_btc},
+        #{market_cap_usd},
+        #{percent_change_24h_usd},
+        #{percent_change_24h_btc},
+        #{percent_change_7d_usd}
+        )
+    </insert>
+
+    <!--GetCoinMarketCapHistory-->
+    <select id="selectCoin" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        site_symbol,
+        coin_name,
+        coin_symbol
+        from coin coin
+    </select>
+    <insert id="insertCoinMarketCapHistoryInfo" parameterType="java.util.HashMap">
+        insert into coin_info(
+        coin_name,
+        coin_symbol,
+        market_cap_usd,
+        price_usd,
+        volume_24h_usd,
+        input_date,
+        rank
+        ) values(
+        #{name},
+        #{symbol},
+        #{market_cap_usd},
+        #{price_usd},
+        #{volume_24h_usd},
+        #{input_date},
+        #{rank}
+        )
+    </insert>
+
+    <!--GetCoinMarketCapLink-->
+    <select id="selectCoinMarketCapLinkCheck" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        1 as result
+        from coin_link
+        where coin_name = #{name}
+        and link_type = '웹사이트'
+        and link_url is not null
+        limit 0,1
+    </select>
+    <insert id="insertCoinMarketCapLinkInfo" parameterType="java.util.HashMap">
+        insert into coin_link(
+        coin_name,
+        coin_symbol,
+        link_type,
+        link_url,
+        sort_id
+        ) values(
+        #{name},
+        #{symbol},
+        '웹사이트',
+        #{site_link},
+        1
+        )
+    </insert>
+</mapper>
+

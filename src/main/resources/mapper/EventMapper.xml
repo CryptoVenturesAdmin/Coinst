@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="mapper.EventMapper">
+
+    <!--이벤트 리스트-->
+    <select id="selectEventCount" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        count(*) as count
+        from
+        (select ico_id,private_sale_start as event_date,ico_name,ico_symbol,ico_type,ico_state,'프라이빗 세일' as event_name, null as event_name_kor, null as link, 'Y' as is_expose
+        from ico
+        where private_sale_start is not null
+        union
+        select ico_id,public_sale_start as event_date,ico_name,ico_symbol,ico_type,ico_state,'퍼블릭 세일' as event_name, null as event_name_kor, null as link, 'Y' as is_expose
+        from ico
+        where public_sale_start is not null
+        union
+        select ico.ico_id,evt.event_date,ico.ico_name,ico.ico_symbol,ico.ico_type,ico.ico_state,evt.coin_event,evt.coin_event_kor,evt.link,evt.is_expose
+        from ico ico
+        inner join coin_event evt
+        on ico.ico_id = evt.ico_id
+        )T
+        where 1=1
+        and is_expose = 'Y'
+        <if test="year != null and year != '' and month != null and month != ''">
+            and event_date like concat(#{year},'-',#{month},'%')
+        </if>
+        <if test="search_text != null and search_text != ''">
+            and (ico_name like concat('%',#{search_text},'%')
+            or ico_symbol like concat('%',#{search_text},'%')
+            or ico_type like concat('%',#{search_text},'%')
+            or event_name like concat('%',#{search_text},'%'))
+        </if>
+        ;
+    </select>
+    <select id="selectEventList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        T.ico_id,
+        T.event_date,
+        case
+        when event_date > current_date() then concat(convert((to_days(event_date)- to_days(current_date())),char(3)),'일 남음')
+        when event_date = current_date() then '오늘 시작'
+        end as left_day,
+        T.ico_name,
+        T.ico_symbol,
+        T.ico_type,
+        T.ico_state,
+        T.event_name,
+        T.event_name_kor,
+        T.source,
+        T.is_expose
+        from
+        (select ico_id,private_sale_start as event_date,ico_name,ico_symbol,ico_type,ico_state,'프라이빗 세일' as event_name, null as event_name_kor, null as source, 'Y' as is_expose
+        from ico
+        where private_sale_start is not null
+        union
+        select ico_id,public_sale_start as event_date,ico_name,ico_symbol,ico_type,ico_state,'퍼블릭 세일' as event_name, null as event_name_kor, null as source, 'Y' as is_expose
+        from ico
+        where public_sale_start is not null
+        union
+        select ico.ico_id,evt.event_date,ico.ico_name,ico.ico_symbol,ico.ico_type,ico.ico_state,evt.coin_event,evt.coin_event_kor,evt.source,evt.is_expose
+        from ico ico
+        inner join coin_event evt
+        on ico.ico_id = evt.ico_id
+        )T
+        where 1=1
+        and is_expose = 'Y'
+        <if test="year != null and year != '' and month != null and month != ''">
+            and event_date like concat(#{year},'-',#{month},'%')
+        </if>
+        <if test="search_text != null and search_text != ''">
+            and (ico_name like concat('%',#{search_text},'%')
+            or ico_symbol like concat('%',#{search_text},'%')
+            or ico_type like concat('%',#{search_text},'%')
+            or event_name like concat('%',#{search_text},'%')
+            or event_name_kor like concat('%',#{search_text},'%'))
+        </if>
+        order by T.event_date,ico_name asc
+        limit #{firstRow},#{rowSize};
+    </select>
+    <!--년도 월 검색하기위한 select 목록-->
+    <select id="selectEventSearchYearList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        distinct
+        year(T.event_date) as year
+        from
+        (select private_sale_start as event_date
+        from ico
+        where private_sale_start is not null
+        union
+        select public_sale_start as event_date
+        from ico
+        where public_sale_start is not null
+        union
+        select evt.event_date
+        from ico ico
+        inner join coin_event evt
+        on ico.ico_id = evt.ico_id
+        )T
+        order by year;
+    </select>
+    <select id="selectEventSearchMonthList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        distinct
+        month(T.event_date) as month
+        from
+        (select private_sale_start as event_date
+        from ico
+        where private_sale_start is not null
+        union
+        select public_sale_start as event_date
+        from ico
+        where public_sale_start is not null
+        union
+        select evt.event_date
+        from ico ico
+        inner join coin_event evt
+        on ico.ico_id = evt.ico_id
+        )T
+        where 1=1
+        <if test="year != null and year != ''">
+            and T.event_date like concat(#{year}, '%')
+        </if>
+        order by T.event_date;
+    </select>
+</mapper>
+

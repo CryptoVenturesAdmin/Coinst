@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="mapper.ReviewerMapper">
+    <!--검색-->
+    <select id="selectReviewerAjaxList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        reviewer_id as id,
+        reviewer_name as name,
+        null as symbol,
+		20 as state
+        from coin_reviewer
+        where 1=1
+        <if test="search_name != null or search_name != ''">
+            and reviewer_name like concat(#{search_name},'%')
+        </if>
+		order by name+0
+    </select>
+    <!--리뷰어 리스트-->
+    <select id="selectReviewerList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        rev.reviewer_id,
+        rev.reviewer_name,
+        (select count(*) from coin_reviewer_portfolio where reviewer_id = rev.reviewer_id) as review_count,
+        (select
+        count(*)
+        from
+        coin_reviewer_portfolio in_prt
+        inner join (select
+			ico.ico_id,
+			ico.ico_name,
+			ico.ico_price,
+			info.price_usd,
+			case
+			when info.price_usd - ico.ico_price >= 0 then 'up'
+			else 'down'
+			end as up_down
+			from (select coin_id, price_usd, last_updated
+			from coin_info
+			where input_date = (select max(input_date) from coin_info)
+			) info
+			inner join (select * from coin where coin_state = 0) coin
+			on coin.coin_id = info.coin_id
+			and coin.last_updated = info.last_updated
+			inner join (select * from ico where ico_state between 0 and 1) ico
+			on ico.ico_id = coin.ico_id
+			) T
+		on T.ico_id = in_prt.ico_id
+        where in_prt.reviewer_id = rev.reviewer_id
+        and in_prt.review_point >= 90
+        and T.up_down = 'up') as review_up_count,
+        (select
+        count(*)
+        from
+        coin_reviewer_portfolio in_prt
+        inner join (select
+			ico.ico_id,
+			ico.ico_name,
+			ico.ico_price,
+			info.price_usd,
+			case
+			when info.price_usd - ico.ico_price >= 0 then 'up'
+			else 'down'
+			end as up_down
+			from (select coin_id, price_usd, last_updated
+			from coin_info
+			where input_date = (select max(input_date) from coin_info)
+			) info
+			inner join (select * from coin where coin_state = 0) coin
+			on coin.coin_id = info.coin_id
+			and coin.last_updated = info.last_updated
+			inner join (select * from ico where ico_state between 0 and 1) ico
+			on ico.ico_id = coin.ico_id
+			) T
+		on T.ico_id = in_prt.ico_id
+        where in_prt.reviewer_id = rev.reviewer_id
+        and in_prt.review_point >= 90) as review_coin_count,
+        (select avg(roi)
+        from coin_reviewer_portfolio in_prt
+        inner join (select
+			ico.ico_id,
+			ico.ico_name,
+			ico.ico_price,
+			info.price_usd,
+            (info.price_usd - ico.ico_price) / ico.ico_price as roi
+			from (select coin_id, price_usd, last_updated
+			from coin_info
+			where input_date = (select max(input_date) from coin_info)
+			) info
+			inner join (select * from coin where coin_state = 0) coin
+			on coin.coin_id = info.coin_id
+			and coin.last_updated = info.last_updated
+			inner join (select * from ico where ico_state between 0 and 1) ico
+			on ico.ico_id = coin.ico_id
+			) T
+		on T.ico_id = in_prt.ico_id
+        where in_prt.reviewer_id = rev.reviewer_id
+        and in_prt.review_point >= 90) as roi,
+        rev.reviewer_link
+        from coin_reviewer rev;
+    </select>
+    <!--리뷰어 상세-->
+    <select id="selectReviewerInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        reviewer_name,
+        reviewer_link
+        from coin_reviewer
+        where reviewer_id = #{id};
+    </select>
+    <!--리뷰한 코인 리스트 상세-->
+    <select id="selectReviewCoinList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        *,
+        case when rating >= 90 then (
+        select (price_usd - T.ico_price) / T.ico_price from coin coin
+        inner join (select * from coin_info where input_date = (select max(input_date) from coin_info)) info
+        on info.coin_id = coin.coin_id
+        and info.last_updated = coin.last_updated
+        where coin.ico_id = T.ico_id
+        )
+        end  as roi
+        from(
+        select
+        rev.reviewer_name,
+        ico.ico_name,
+        ico.ico_symbol,
+        ico.ico_type,
+        ico.ico_price,
+        ico.ico_image,
+        (select avg(review_point) from coin_reviewer_portfolio where ico_id = ico.ico_id) as rating,
+        (select coin_id from coin where ico_id = ico.ico_id) as coin_id,
+        ico.ico_state,
+        prt.detail_url,
+        prt.review_point,
+        ico.ico_id
+        from ico ico
+        inner join coin_reviewer_portfolio prt
+        on ico.ico_id = prt.ico_id
+        inner join coin_reviewer rev
+        on prt.reviewer_id = rev.reviewer_id
+        where rev.reviewer_id = #{id})T;
+    </select>
+</mapper>
+

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="mapper.CompanyMapper">
+    <!--검색-->
+    <select id="selectCompanyAjaxList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        company_id as id,
+        company_name as name,
+        null as symbol,
+        10 as state
+        from investors
+        where 1=1
+        <if test="search_name != null or search_name != ''">
+			and company_name like concat(#{search_name},'%')
+        </if>
+		order by name+0
+    </select>
+    <!--투자사 리스트-->
+    <select id="selectCompanyList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        company_id,
+        company_name,
+        company_web_site,
+        company_twitter,
+        company_info,
+        company_image
+        from investors;
+    </select>
+    <!--투자한 코인 리스트-->
+    <select id="selectInvestCoinList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico.ico_id,
+        ico.ico_name,
+        ico.ico_symbol,
+        inv.company_name,
+        ico.ico_state
+        from investors_portfolio prt
+        inner join investors inv
+        on prt.company_id = inv.company_id
+        inner join ico ico
+        on prt.ico_id = ico.ico_id
+        <if test="company_id != null and company_id != ''">
+          and inv.company_id = #{company_id}
+        </if>;
+    </select>
+    <!--투자사 상세-->
+    <select id="selectInvestInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        company_name,
+        company_web_site,
+        company_twitter,
+        company_info,
+        company_image
+        from investors
+        where company_id = #{id};
+    </select>
+    <!--투자한 코인 리스트 상세-->
+    <select id="selectInvestCoinDetailList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        inv.company_name,
+        ico.ico_image,
+        ico.ico_name,
+        ico.ico_symbol,
+        ico.ico_type,
+        ico.ico_price,
+        info.price_usd,
+        case
+        when ico.ico_price = 0 then null
+        else
+            case
+            when info.price_usd/ico.ico_price >= 1 then info.price_usd / ico.ico_price
+            else (info.price_usd / ico.ico_price) - 1
+            end
+        end as roi,
+        (select avg(review_point) from coin_reviewer_portfolio where ico_id = ico.ico_id) as rating,
+        ico.ico_state,
+        case
+        when current_date() >= ico.private_sale_start and ico.private_sale_end >= current_date() then '프라이빗 세일'
+        when current_date() >= ico.public_sale_start and ico.public_sale_end >= current_date() then '퍼블릭 세일'
+        end as current_state,
+        ico.ico_id
+        from investors_portfolio prt
+        inner join investors inv
+        on prt.company_id = inv.company_id
+        inner join ico ico
+        on prt.ico_id = ico.ico_id
+        inner join coin coin
+        on coin.ico_id = ico.ico_id
+        inner join (select * from coin_info
+        where input_date = (select max(input_date) from coin_info)
+        ) info
+        on info.coin_id = coin.coin_id
+        and info.last_updated = coin.last_updated
+        where inv.company_id = #{id};
+    </select>
+</mapper>
+

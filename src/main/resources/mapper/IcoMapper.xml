@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="mapper.IcoMapper">
+
+    <select id="selectIcoList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico_id,
+        ico_name,
+        ico_symbol,
+        ico_type,
+        case
+        when private_sale_start > current_date() then '프라이빗 세일 예정'
+        when current_date() >= private_sale_start and private_sale_end >= current_date() then '프라이빗 세일 진행중'
+        when current_date() >= private_sale_start and private_sale_end is null  then '프라이빗 세일 진행중'
+        when current_date() > private_sale_end and public_sale_start > current_date() then '퍼블릭 세일 예정'
+        when current_date() >= public_sale_start and public_sale_end >= current_date() then '퍼블릭 세일 진행중'
+        when current_date() >= public_sale_start and public_sale_end is null then '퍼블릭 세일 진행중'
+        when current_date() > public_sale_end then '이벤트 종료'
+        end as current_sale_type,
+        (select
+        avg(review_point)
+        from coin_reviewer_portfolio
+        where ico_id = ico.ico_id
+        ) as rating,
+        ico_state,
+        ico_image
+        from ico
+        where ico_state = 2
+        <if test="ico_type != null and ico_type != ''">
+            and ico_type = #{ico_type}
+        </if>
+        order by rating;
+    </select>
+    <!--ICO 이벤트 예정 코인 리스트-->
+    <select id="selectIcoUpcommingList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico.ico_id,
+        ico.ico_name,
+        ico.ico_symbol,
+        ico.ico_type,
+        ico.ico_price,
+        ico.hardcap,
+        ico.ico_state,
+        case
+        when private_sale_start > current_date() then '프라이빗 세일'
+        when public_sale_start > current_date() and current_date() > private_sale_end then '퍼블릭 세일'
+        end as current_sale_type,
+        case
+        when private_sale_start > current_date()  then
+        concat(convert((to_days(private_sale_start)- to_days(current_date())),char(3)),'일 후 시작')
+        when current_date() > private_sale_end and public_sale_start > current_date() then
+        concat(convert((to_days(public_sale_start) - to_days(current_date())),char(3)),'일 후 시작')
+        end as left_day,
+        ico.public_sale_start,
+        ico.public_sale_end,
+        ico.private_sale_start,
+        ico.private_sale_end,
+        (select avg(review_point) from coin_reviewer_portfolio where ico_id = ico.ico_id) as rating,
+        ico.ico_image,
+        (select count(*) from coin_reviewer_portfolio where ico_id = ico.ico_id) as review_count
+        from ico ico
+        where ico_state = 2
+        and (private_sale_start > current_date()
+        or (public_sale_start > current_date() and current_date() > private_sale_end)
+        or (private_sale_start is null and public_sale_start is null and (public_sale_end > current_date() or public_sale_end is null)))
+        <if test="ico_type != null and ico_type != ''">
+            and ico.ico_type = #{ico_type}
+        </if>
+        order by rating desc
+        limit #{firstRow},#{rowSize};
+    </select>
+    <!--ico리스트 카운트-->
+    <select id="selectIcoCount" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        count(*) as count
+        from ico ico
+        where ico_state = 2
+        <choose>
+            <when test="type == 0">
+                and (private_sale_start > current_date()
+                or (public_sale_start > current_date() and current_date() > private_sale_end)
+                or (private_sale_start is null and public_sale_start is null and (public_sale_end > current_date() or public_sale_end is null)))
+            </when>
+            <when test="type == 1">
+                and ((current_date() >= private_sale_start and private_sale_end >= current_date())
+                or (current_date() >= public_sale_start and public_sale_end >= current_date())
+                or (current_date() >= private_sale_start and private_sale_end is null)
+                or (current_date() >= public_sale_start and public_sale_end is null))
+            </when>
+            <when test="type == 2">
+                and current_date() > public_sale_end
+            </when>
+        </choose>
+        <if test="ico_type != null and ico_type != ''">
+            and ico.ico_type = #{ico_type}
+        </if>;
+    </select>
+    <!--ICO 이벤트 진행중 코인 리스트-->
+    <select id="selectIcoActiveList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico.ico_id,
+        ico.ico_name,
+        ico.ico_symbol,
+        ico.ico_type,
+        ico.ico_price,
+        ico.hardcap,
+        ico.ico_state,
+        case
+        when current_date() >= private_sale_start and private_sale_end >= current_date()  then '프라이빗 세일'
+        when current_date() >= private_sale_start and private_sale_end is null  then '프라이빗 세일'
+        when current_date() >= public_sale_start and public_sale_end >= current_date() then '퍼블릭 세일'
+        when current_date() >= public_sale_start and public_sale_end is null then '퍼블릭 세일'
+        end as current_sale_type,
+        case
+        when current_date() >= private_sale_start and private_sale_end > current_date()  then
+        concat(convert((to_days(private_sale_end)- to_days(current_date())),char(3)),'일 후 종료')
+        when current_date() = private_sale_end then
+        '오늘 종료'
+        when current_date() >= public_sale_start and public_sale_end > current_date() then
+        concat(convert((to_days(public_sale_end) - to_days(current_date())),char(3)),'일 후 종료')
+        when current_date() = public_sale_end then
+        '오늘 종료'
+        end as left_day,
+        ico.public_sale_start,
+        ico.public_sale_end,
+        ico.private_sale_start,
+        ico.private_sale_end,
+        (select avg(review_point) from coin_reviewer_portfolio where ico_id = ico.ico_id) as rating,
+        ico.ico_image,
+        (select count(*) from coin_reviewer_portfolio where ico_id = ico.ico_id) as review_count
+        from ico ico
+        where ico_state = 2
+        and ((current_date() >= private_sale_start and private_sale_end >= current_date())
+        or (current_date() >= public_sale_start and public_sale_end >= current_date())
+        or (current_date() >= private_sale_start and private_sale_end is null)
+        or (current_date() >= public_sale_start and public_sale_end is null))
+        <if test="ico_type != null and ico_type != ''">
+            and ico.ico_type = #{ico_type}
+        </if>
+        order by rating desc
+        limit #{firstRow},#{rowSize}
+    </select>
+    <!--ICO 이벤트 종료된 코인 리스트-->
+    <select id="selectIcoEndedList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico.ico_id,
+        ico.ico_name,
+        ico.ico_symbol,
+        ico.ico_type,
+        ico.ico_price,
+        ico.hardcap,
+        ico.ico_state,
+        ico.public_sale_start,
+        ico.public_sale_end,
+        ico.private_sale_start,
+        ico.private_sale_end,
+        (select avg(review_point) from coin_reviewer_portfolio where ico_id = ico.ico_id) as rating,
+        ico.ico_image,
+        (select count(*) from coin_reviewer_portfolio where ico_id = ico.ico_id) as review_count
+        from ico ico
+        where ico_state = 2
+        and current_date() > public_sale_end
+        <if test="ico_type != null and ico_type != ''">
+            and ico.ico_type = #{ico_type}
+        </if>
+        order by rating desc
+        limit #{firstRow},#{rowSize};
+    </select>
+    <!--상장된 ICO-->
+    <select id="selectIcoToCoinList" parameterType="java.util.HashMap" resultType="java.util.Hashtable">
+        select
+        ico.ico_id,
+        ico.ico_image,
+        ico.ico_name,
+        ico.ico_symbol,
+        ico.ico_type,
+        ico.ico_state,
+        ico.ico_price,
+        info.price_usd,
+        case
+        when ico.ico_price = 0 then null
+        else
+            case
+            when info.price_usd/ico.ico_price >= 1 then info.price_usd / ico.ico_price
+            else (info.price_usd / ico.ico_price) - 1
+            end
+        end as roi,
+        (select avg(review_point) from coin_reviewer_portfolio where ico_id = ico.ico_id) as rating,
+        (select count(*) from coin_reviewer_portfolio where ico_id = ico.ico_id) as  review_count
+        from ico ico
+        inner join coin coin
+        on coin.ico_id = ico.ico_id
+        inner join (select * from coin_info
+        where input_date = (select max(input_date) from coin_info)) info
+        on info.coin_id = coin.coin_id
+        and info.last_updated = coin.last_updated
+        where ico_state = 1
+        <if test="ico_type != null and ico_type != ''">
+            and ico.ico_type = #{ico_type}
+        </if>
+        ;
+    </select>
+    <!--ICO 코인 상세-->
+    <select id="selectIcoInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico_id,
+        ico_name,
+        ico_symbol,
+        ico_type,
+        case
+        when private_sale_start > current_date() then '프라이빗 세일 예정'
+        when current_date() >= private_sale_start and private_sale_end >= current_date() then '프라이빗 세일 진행중'
+        when current_date() >= private_sale_start and private_sale_end is null and public_sale_start > current_date() then '프라이빗 세일 진행중'
+        when current_date() >= private_sale_start and private_sale_end is null and public_sale_start is null then '프라이빗 세일 진행중'
+        when current_date() > private_sale_end and public_sale_start > current_date() then '퍼블릭 세일 예정'
+        when current_date() >= public_sale_start and public_sale_end >= current_date() then '퍼블릭 세일 진행중'
+        when current_date() >= public_sale_start and public_sale_end is null then '퍼블릭 세일 진행중'
+        when current_date() > public_sale_end then '이벤트 종료'
+        end as current_sale_type,
+        case
+        when private_sale_start > current_date() then
+        concat(convert((to_days(private_sale_start)- to_days(current_date())),char(3)),'일 후 시작')
+        when current_date() > private_sale_end and public_sale_start > current_date() then
+        concat(convert((to_days(public_sale_start) - to_days(current_date())),char(3)),'일 후 시작')
+        when current_date() >= private_sale_start and private_sale_end > current_date()  then
+        concat(convert((to_days(private_sale_end)- to_days(current_date())),char(3)),'일 후 종료')
+        when current_date() = private_sale_end then
+        '오늘 종료'
+        when current_date() >= public_sale_start and public_sale_end > current_date() then
+        concat(convert((to_days(public_sale_end) - to_days(current_date())),char(3)),'일 후 종료')
+        when current_date() = public_sale_end then
+        '오늘 종료'
+        end as left_day,
+        public_sale_start,
+        public_sale_end,
+        private_sale_start,
+        private_sale_end,
+        (select avg(review_point) from coin_reviewer_portfolio where ico_id = ico.ico_id) as rating,
+        hardcap,
+        ico_explain,
+        ico_special,
+        ico_state,
+        ico_image,
+        ico_video,
+        ico_image,
+        ico_price,
+        max_supply,
+        ico_kyc,
+        ico_white_list,
+        ico_roadmap,
+        update_date
+        from ico
+        where ico_id =  #{id};
+    </select>
+
+</mapper>
+

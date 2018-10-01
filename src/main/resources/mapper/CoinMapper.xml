@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="mapper.CoinMapper">
+    <!--검색-->
+    <select id="selectCoinAjaxList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico.ico_id as id,
+        ico.ico_name as name,
+        ico.ico_symbol as symbol,
+        ico.ico_state as state,
+        info.rank
+        from
+        (select
+        *
+        from coin_info
+        where input_date = (select max(input_date) from coin_info)
+        order by rank) info
+        inner join coin coin
+        on coin.coin_id = info.coin_id
+        and coin.last_updated = info.last_updated
+        inner join ico ico
+        on coin.ico_id = ico.ico_id
+        where 1=1
+        <if test="search_name != null or search_name != ''">
+            and (ico.ico_name like concat(#{search_name}, '%') or ico.ico_symbol like concat(#{search_name}, '%'))
+        </if>
+        and ico.ico_state between 0 and 1
+        union all
+        select
+        ico_id as id,
+        ico_name as name,
+        ico_symbol as symbol,
+        ico_state as state,
+        (select count(*)+1 from coin) as rank
+        from ico
+        where 1=1
+        <if test="search_name != null or search_name != ''">
+            and (ico_name like concat(#{search_name}, '%') or ico_symbol like concat(#{search_name}, '%'))
+        </if>
+        and ico_state = 2
+        order by rank+0, name+0
+        <if test="type == 'info'">
+            limit 0,1
+        </if>
+        ;
+
+    </select>
+
+
+    <!--상장된 코인 리스트-->
+    <select id="selectCoinList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select * from (
+        select
+        convert((@rownum := @rownum + 1 ), unsigned) as rank, A.* from
+        (select
+        coin.coin_id,
+        info.before_1m_rank,
+        coin.coin_name,
+        coin.coin_symbol,
+        ico.ico_image,
+        ico.ico_type,
+        info.market_cap_usd,
+        info.price_usd,
+        info.volume_24h_usd,
+        info.percent_change_24h_usd,
+        info.percent_change_7d_usd,
+        coin.coin_state,
+        info.input_date,
+        ico.ico_id,
+        info.last_updated
+        from
+        (select *
+        from coin_info
+        where input_date = (select max(input_date) from coin_info)
+        order by rank) info
+        inner join (select * from coin where coin_state = 0) coin
+        on coin.coin_id = info.coin_id
+        and coin.last_updated = info.last_updated
+        inner join (select ico_id,ico_image,ico_type from ico where ico_state between 0 and 1) ico
+        on ico.ico_id = coin.ico_id
+        order by rank)A,(select @rownum := (0))R
+        )T
+        where 1=1
+        <if test="ico_type != null and ico_type != ''">
+            and T.ico_type = #{ico_type}
+        </if>
+        order by T.rank
+        <if test="rowSize != null and rowSize != ''">
+            limit #{firstRow},#{rowSize}
+        </if>
+        ;
+    </select>
+    <!--코인 리스트 카운트-->
+    <select id="selectCoinCount" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select count(*) as count from
+        (select *
+        from coin_info
+        where input_date = (select max(input_date) from coin_info)
+        order by rank) info
+        inner join (select * from coin where coin_state = 0) coin
+        on coin.coin_id = info.coin_id
+        and coin.last_updated = info.last_updated
+        inner join (select ico_id,ico_image,ico_type from ico where ico_state between 0 and 1) ico
+        on ico.ico_id = coin.ico_id
+        where 1=1
+        <if test="ico_type != null and ico_type != ''">
+            and ico.ico_type = #{ico_type}
+        </if>
+        ;
+    </select>
+    <!--코인 구분 리스트-->
+    <select id="selectCoinTypeList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        distinct ico_type
+        from ico
+        where 1=1
+        <choose>
+            <when test="ico_state == 0">
+                and 1 >= ico_state
+            </when>
+            <when test="ico_state == 1">
+                and #{ico_state} = ico_state
+            </when>
+            <when test="ico_state == 2">
+                and ico_state = #{ico_state}
+            </when>
+        </choose>
+        <choose>
+            <when test='isBook == "Y"'>
+                <if test="bookedCoin != null and bookedCoin != ''">
+                    and ico_id in (${bookedCoin})
+                </if>
+            </when>
+            <otherwise>
+                <if test="ico_state == 2">
+                    <choose>
+                        <when test="type == 0">
+                            and (private_sale_start > current_date()
+                            or (public_sale_start > current_date() and current_date() > private_sale_end)
+                            or (private_sale_start is null and public_sale_start is null and (public_sale_end > current_date() or public_sale_end is null)))
+                        </when>
+                        <when test="type == 1">
+                            and ((current_date() >= private_sale_start and private_sale_end >= current_date())
+                            or (current_date() >= public_sale_start and public_sale_end >= current_date())
+                            or (current_date() >= private_sale_start and private_sale_end is null)
+                            or (current_date() >= public_sale_start and public_sale_end is null))
+                        </when>
+                        <when test="type == 2">
+                            and current_date() > public_sale_end
+                        </when>
+                    </choose>
+                </if>
+            </otherwise>
+        </choose>
+        and ico_type is not null
+        order by ico_type;
+    </select>
+    <!--상장된 코인 상세-->
+    <select id="selectCoinInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        coin.coin_id,
+        coin.coin_name,
+        coin.coin_symbol,
+        ico.ico_type,
+        info.rank,
+        info.market_cap_usd,
+        info.price_usd,
+        info.price_btc,
+        info.circulating_supply,
+        info.volume_24h_usd,
+        info.percent_change_24h_usd,
+        info.percent_change_7d_usd,
+        info.total_supply,
+        info.max_supply,
+        coin.coin_state,
+        ico.ico_image,
+        ico.ico_id,
+        ico.ico_explain,
+        ico.ico_special,
+        ico_state
+        from
+        (select
+        *
+        from coin_info
+        where input_date = (select max(input_date) from coin_info)
+        order by rank) info
+        inner join coin coin
+        on coin.coin_id = info.coin_id
+        and coin.last_updated = info.last_updated
+        inner join ico ico
+        on coin.ico_id = ico.ico_id
+        where 1=1
+        and coin.ico_id = #{id};
+    </select>
+
+    <select id="selectCoinlinkList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        ico.ico_id,
+        link.link_type,
+        link.link_url
+        from  ico ico
+        inner join coin_link link
+        on ico.ico_id = link.ico_id
+        where ico.ico_id = #{id}
+        order by sort_id ASC;
+    </select>
+
+    <select id="selectCoinGraphDataList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        price_usd,
+        market_cap_usd,
+        volume_24h_usd,
+        input_date,
+        last_updated
+        from coin_info
+        where coin_id = #{coin_id}
+        order by input_date;
+    </select>
+
+    <select id="selectCoinEventList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        evt.coin_event,
+        evt.event_date,
+        evt.link
+        from ico ico
+        inner join coin_event evt
+        on ico.ico_id = evt.ico_id
+        where ico.ico_id = #{id}
+        and event_date >= current_date()
+        order by event_date;
+    </select>
+
+    <select id="selectCoinReviewList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        rev.reviewer_name,
+        prt.review_point,
+        prt.detail_url
+        from ico ico
+        inner join coin_reviewer_portfolio prt
+        on ico.ico_id = prt.ico_id
+        inner join coin_reviewer rev
+        on prt.reviewer_id = rev.reviewer_id
+        where ico.ico_id = #{id};
+    </select>
+
+    <select id="selectCoinCompanyList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        inv.company_id,
+        inv.company_name,
+        inv.company_web_site,
+        inv.company_image
+        from ico ico
+        inner join investors_portfolio prt
+        on ico.ico_id = prt.ico_id
+        inner join investors inv
+        on prt.company_id = inv.company_id
+        where ico.ico_id = #{id};
+    </select>
+
+    <!--실시간 마켓 정보를 위한 코인 리스트-->
+    <select id="selectCoinSymbolForMarketData" resultType="java.util.HashMap">
+        select coin.coin_id,info.rank,coin.coin_symbol,info.percent_change_24h_usd
+        from coin coin
+        inner join (select * from coin_info where input_date = (select max(input_date) from coin_info)) info
+        on info.coin_id = coin.coin_id
+        and info.last_updated = coin.last_updated
+        where 10 >= rank
+        order by rank;
+    </select>
+
+    <!--환전 정보-->
+    <select id="selectExchangeList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        exc_id,
+        exc_name,
+        country,
+        is_expose
+        from coin_exchange
+        where is_expose = 'Y';
+    </select>
+
+    <select id="selectExchangeInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+        exc_id,
+        exc_name,
+        exc_rate,
+        last_updated,
+        input_date
+        from coin_exchange_info excInfo
+        where 1=1
+        <choose>
+            <when test="exc_id != null and exc_id != ''">
+              and exc_id = #{exc_id}
+            </when>
+            <otherwise>
+              and exc_id = 1
+            </otherwise>
+        </choose>
+        and input_date = (select max(input_date) from coin_exchange_info where excInfo.exc_id = exc_id);
+    </select>
+
+</mapper>
+
